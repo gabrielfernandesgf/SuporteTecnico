@@ -1,73 +1,79 @@
-# Welcome to your Lovable project
+# Sistema de Controle de Técnicos
 
-## Project info
+Aplicação para gestão de agendamentos e controle de tempo de atendimento de técnicos externos, com painel para secretárias e funcionalidades adaptadas para desktop e mobile.
 
-**URL**: https://lovable.dev/projects/11ed93ec-3c73-40c3-9a0b-e80d72af61d9
+## ✅ Funcionalidades
 
-## How can I edit this code?
+- Agendamentos por secretárias com definição de cliente, endereço, tipo de serviço e horário.
+- Técnicos registram saída, chegada e finalização do atendimento.
+- Controle de tempo de deslocamento e tempo de atendimento.
+- Cancelamento de agendamentos com registro de motivo.
+- Envio de localização via GPS pelo técnico (em desenvolvimento).
+- Visualização de dados em tempo real via painel web.
 
-There are several ways of editing your application.
+## 🛠 Tecnologias Utilizadas
 
-**Use Lovable**
+- **React** com **TypeScript**
+- **Vite** como bundler
+- **Tailwind CSS** para estilização
+- **shadcn/ui** para componentes
+- **Supabase** como banco de dados e autenticação
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/11ed93ec-3c73-40c3-9a0b-e80d72af61d9) and start prompting.
+## 📦 Instalação Local
 
-Changes made via Lovable will be committed automatically to this repo.
+### Pré-requisitos
 
-**Use your preferred IDE**
+- [Node.js](https://nodejs.org/) (recomenda-se usar com [nvm](https://github.com/nvm-sh/nvm))
+- [Git](https://git-scm.com/)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Passos
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# 1. Clone o repositório
+git clone https://github.com/seu-usuario/seu-repo.git
 
-Follow these steps:
+# 2. Acesse o diretório
+cd nome-do-projeto
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# 3. Instale as dependências
+npm install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# 4. Crie um arquivo .env com as variáveis:
+cp .env.example .env
+# edite com suas chaves do Supabase
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# 5. Inicie o servidor de desenvolvimento
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## 🌐 Deploy
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Este projeto pode ser hospedado em:
 
-**Use GitHub Codespaces**
+- [Vercel](https://vercel.com/)
+- [Netlify](https://netlify.com/)
+- Ou em servidor próprio (ex: VPS com Nginx ou Docker)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 📱 Acesso via celular
 
-## What technologies are used for this project?
+- A aplicação é responsiva.
+- Tecnologias de geolocalização via navegador são utilizadas para envio da localização dos técnicos.
+- Requer **HTTPS** para uso da API de localização.
 
-This project is built with:
+## ✨ Contribuindo
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Pull requests são bem-vindos! Sinta-se à vontade para sugerir melhorias, reportar bugs ou criar funcionalidades.
 
-## How can I deploy this project?
+---
 
-Simply open [Lovable](https://lovable.dev/projects/11ed93ec-3c73-40c3-9a0b-e80d72af61d9) and click on Share -> Publish.
+## 🔐 Observações
 
-## Can I connect a custom domain to my Lovable project?
+- A geolocalização requer que o site esteja servindo em HTTPS.
+- Apenas agendamentos com status `agendado` podem ser cancelados.
+- O Supabase impõe regras de integridade via `CHECK CONSTRAINT`.
 
-Yes, you can!
+---
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## 📄 Licença
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Este projeto é de uso interno. Direitos reservados.

@@ -1,4 +1,4 @@
--- Remover política problemática
+-- Remove problematic policy
 DROP POLICY IF EXISTS "Secretarias can view technician profiles" ON public.profiles;
 
 -- Criar função security definer para verificar o papel do usuário

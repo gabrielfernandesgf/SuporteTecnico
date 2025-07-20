@@ -36,7 +36,6 @@ const TecnicoView = () => {
       if (error) throw error;
       setAgendamentos(data || []);
     } catch (error) {
-      console.error('Erro ao buscar agendamentos:', error);
       toast({
         title: "Erro",
         description: "Não foi possível carregar os agendamentos",
@@ -58,7 +57,7 @@ const TecnicoView = () => {
       if (error) throw error;
       setEncaixes(data || []);
     } catch (error) {
-      console.error('Erro ao buscar encaixes:', error);
+      // Erro ao buscar encaixes
     }
   };
 
@@ -89,7 +88,6 @@ const TecnicoView = () => {
         description: `Saída registrada às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
       });
     } catch (error) {
-      console.error('Erro ao registrar saída:', error);
       toast({
         title: "Erro",
         description: "Não foi possível registrar a saída",
@@ -125,7 +123,6 @@ const TecnicoView = () => {
         description: `Chegada ao cliente registrada às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
       });
     } catch (error) {
-      console.error('Erro ao registrar chegada:', error);
       toast({
         title: "Erro",
         description: "Não foi possível registrar a chegada",
@@ -190,7 +187,6 @@ const TecnicoView = () => {
         description: `Atendimento concluído às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
       });
     } catch (error) {
-      console.error('Erro ao finalizar atendimento:', error);
       toast({
         title: "Erro",
         description: "Não foi possível finalizar o atendimento",
@@ -244,14 +240,13 @@ const TecnicoView = () => {
       horario: new Date().toTimeString().split(" ")[0],
     };
 
-    console.log("Payload do insert:", novoAgendamento);
-
+    // Removido console.log de produção
     const { error: insetError } = await supabase
       .from('agendamentos')
       .insert(novoAgendamento);
 
    if (insetError) {
-    console.error("Erro detalhado no insert:", JSON.stringify(insetError, null, 2));
+    // Erro detalhado no insert
   }
 
 
@@ -273,7 +268,6 @@ const TecnicoView = () => {
         description: "O encaixe foi adicionado à sua agenda.",
       });
     } catch (error) {
-      console.error("Erro ao aceitar encaixe:", error);
       toast({
         title: "Erro",
         description: "Não foi possível aceitar o encaixe",

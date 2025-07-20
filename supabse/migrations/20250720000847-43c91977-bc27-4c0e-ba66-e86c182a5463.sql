@@ -1,4 +1,4 @@
--- Permitir que secretárias vejam perfis de técnicos para criar agendamentos
+-- Allow secretaries to view technician profiles to create appointments
 CREATE POLICY "Secretarias can view technician profiles" 
 ON public.profiles 
 FOR SELECT 

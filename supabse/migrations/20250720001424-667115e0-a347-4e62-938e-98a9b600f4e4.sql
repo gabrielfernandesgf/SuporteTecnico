@@ -1,4 +1,4 @@
--- Remover política problemática e função
+-- Remove problematic policy and function
 DROP POLICY IF EXISTS "Secretarias can view technician profiles" ON public.profiles;
 DROP FUNCTION IF EXISTS public.get_current_user_role();
 
