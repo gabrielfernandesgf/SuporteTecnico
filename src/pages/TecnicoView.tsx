@@ -394,7 +394,7 @@ const TecnicoView = () => {
           <div className="space-y-6">
             {agendamentos.map((agendamento) => (
               <div key={agendamento.id} className="border rounded-lg p-6">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-foreground">#{agendamento.id}</span>
@@ -404,11 +404,12 @@ const TecnicoView = () => {
                     </div>
                     <h3 className="text-xl font-medium text-foreground">{agendamento.cliente}</h3>
                   </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-bold text-primary">{agendamento.horario}</span>
+                  <div className="sm:text-right">
+                    <span className="text-xl sm:text-2xl font-bold text-primary block">{agendamento.horario}</span>
                     <p className="text-sm text-muted-foreground">{agendamento.tipo}</p>
                   </div>
                 </div>
+
                 
                 <div className="space-y-3 mb-4">
                   <div className="flex items-start">
