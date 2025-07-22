@@ -18,11 +18,28 @@ const TecnicoView = () => {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    if (user && userProfile?.role === 'tecnico') {
-      fetchAgendamentos();
-      fetchEncaixes();
-    }
-  }, [user, userProfile]);
+  if (user && userProfile?.role === 'tecnico') {
+    fetchAgendamentos();
+    fetchEncaixes();
+    solicitarPermissaoLocalizacao();
+  }
+}, [user, userProfile]);
+
+const solicitarPermissaoLocalizacao = () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      () => {},
+      () => {
+        toast({
+          title: "Aviso",
+          description: "Você precisa permitir o acesso à localização para registrar chegada no cliente.",
+          variant: "destructive"
+        });
+      }
+    );
+  }
+};
+
 
   const fetchAgendamentos = async () => {
     try {
@@ -105,38 +122,65 @@ const TecnicoView = () => {
 
   const registrarChegada = async (agendamentoId: string) => {
     const agora = new Date();
-    
-    try {
-      const { error } = await supabase
-        .from('agendamentos')
-        .update({
-          status: 'em_andamento',
-          chegada_horario: agora.toISOString()
-        })
-        .eq('id', agendamentoId);
-      
-      if (error) throw error;
-      
-      setAgendamentos(prev => 
-        prev.map(ag => 
-          ag.id === agendamentoId 
-            ? { ...ag, chegada_horario: agora.toISOString(), status: 'em_andamento' }
-            : ag
-        )
-      );
-      
-      toast({
-        title: "Chegada registrada!",
-        description: `Chegada ao cliente registrada às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
-      });
-    } catch (error) {
+
+    if (!navigator.geolocation) {
       toast({
         title: "Erro",
-        description: "Não foi possível registrar a chegada",
+        description: "Seu navegador não suporta geolocalização.",
         variant: "destructive"
       });
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+
+      try {
+        const { error } = await supabase
+          .from('agendamentos')
+          .update({
+            status: 'em_andamento',
+            chegada_horario: agora.toISOString(),
+            localizacao_chegada: `${latitude},${longitude}`
+          })
+          .eq('id', agendamentoId);
+
+        if (error) throw error;
+
+        setAgendamentos(prev =>
+          prev.map(ag =>
+            ag.id === agendamentoId
+              ? {
+                  ...ag,
+                  chegada_horario: agora.toISOString(),
+                  status: 'em_andamento',
+                  localizacao_chegada: `${latitude},${longitude}`
+                }
+              : ag
+          )
+        );
+
+        toast({
+          title: "Chegada registrada!",
+          description: `Localização salva: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+        });
+      } catch (error) {
+        toast({
+          title: "Erro",
+          description: "Erro ao salvar localização da chegada",
+          variant: "destructive"
+        });
+      }
+    }, () => {
+      toast({
+        title: "Erro",
+        description: "Permissão de localização negada",
+        variant: "destructive"
+      });
+    });
   };
+
 
   const calcularTempoMinutos = (inicio: string, fim: string): number => {
     const inicioDate = new Date(inicio);

@@ -116,8 +116,6 @@ const AgendamentoDetailsDialog = ({
     return `${dia}/${mes}/${ano}`;
   }
 
-
-
   return (
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -228,6 +226,21 @@ const AgendamentoDetailsDialog = ({
                   <p className="text-sm">
                     {formatDateTime(agendamento.finalizacao_horario)}
                   </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Localização de Chegada
+                  </Label>
+                  {agendamento.localizacao_chegada && (
+                    <a
+                      href={`https://www.google.com/maps?q=${agendamento.localizacao_chegada}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary underline"
+                    > <br />
+                      Ver localização no mapa
+                    </a>
+                  )}
                 </div>
               </div>
 
