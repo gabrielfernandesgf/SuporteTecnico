@@ -23,6 +23,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
 
+
 interface AgendamentoDetailsDialogProps {
   agendamento: any;
   onAgendamentoAtualizado?: () => void;
@@ -109,6 +110,14 @@ const AgendamentoDetailsDialog = ({
     }
   };
 
+  function formatarData(data: string) {
+    // Evita conversão para UTC
+    const [ano, mes, dia] = data.split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+
+
+
   return (
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -153,6 +162,10 @@ const AgendamentoDetailsDialog = ({
                 </Label>
                 <p className="text-sm">{agendamento.tipo}</p>
               </div>
+               <div>
+                 <span className="text-muted-foreground">Técnico:</span>
+                 <p className="text-foreground">{agendamento.tecnico}</p>
+               </div>
             </CardContent>
           </Card>
 
@@ -170,7 +183,7 @@ const AgendamentoDetailsDialog = ({
                     Data
                   </Label>
                   <p className="text-sm">
-                    {new Date(agendamento.data).toLocaleDateString("pt-BR")}
+                    <span>{formatarData(agendamento.data)}</span>
                   </p>
                 </div>
                 <div>

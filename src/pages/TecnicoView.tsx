@@ -26,14 +26,20 @@ const TecnicoView = () => {
 
   const fetchAgendamentos = async () => {
     try {
+      const hoje = new Date();
+
+      // Formata a data no formato YYYY-MM-DD respeitando o fuso horário local
+      const dataFormatada = hoje.toLocaleDateString('sv-SE'); // 'sv-SE' => yyyy-mm-dd
+
       const { data, error } = await supabase
         .from('agendamentos')
         .select('*')
         .eq('tecnico_id', user?.id)
-        .eq('data', new Date().toISOString().split('T')[0])
+        .eq('data', dataFormatada) // <- comparação correta para campo Date (sem hora)
         .order('horario');
-      
+
       if (error) throw error;
+
       setAgendamentos(data || []);
     } catch (error) {
       toast({
@@ -45,6 +51,7 @@ const TecnicoView = () => {
       setLoading(false);
     }
   };
+
 
   const fetchEncaixes = async () => {
     try {
@@ -291,6 +298,13 @@ const TecnicoView = () => {
     return `${mins}min`;
   };
 
+  function formatarData(data: string) {
+  return new Date(data).toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo'
+  });
+}
+
+
   const renderBotaoAcao = (agendamento: any) => {
     if (agendamento.status === "agendado") {
       return (
@@ -405,6 +419,7 @@ const TecnicoView = () => {
                     <h3 className="text-xl font-medium text-foreground">{agendamento.cliente}</h3>
                   </div>
                   <div className="sm:text-right">
+                    <span className="block text-sm text-muted-foreground"> {formatarData(agendamento.data)} </span>
                     <span className="text-xl sm:text-2xl font-bold text-primary block">{agendamento.horario}</span>
                     <p className="text-sm text-muted-foreground">{agendamento.tipo}</p>
                   </div>

@@ -19,12 +19,14 @@ const Dashboard = () => {
   const [agendamentos, setAgendamentos] = useState<any[]>([]);
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [buscaTexto, setBuscaTexto] = useState("");
+  const [dataSelecionada, setDataSelecionada] = useState(new Date());
 
-  useEffect(() => {
+ useEffect(() => {
     if (user && userProfile?.role === 'secretaria') {
       fetchDashboardData();
     }
-  }, [user, userProfile]);
+  }, [user, userProfile, dataSelecionada]);
+
 
   const fetchDashboardData = async () => {
     try {
@@ -71,8 +73,9 @@ const Dashboard = () => {
       
       if (error) throw error;
 
-      // Buscar agendamentos de hoje para cada técnico
-      const hoje = new Date().toISOString().split('T')[0];
+      // Formato local confiável (YYYY-MM-DD sem fuso UTC)
+      const hoje = new Date().toLocaleDateString("sv-SE");
+
       const { data: agendamentosHoje, error: agendamentosError } = await supabase
         .from('agendamentos')
         .select('tecnico_id, status')
@@ -83,9 +86,9 @@ const Dashboard = () => {
       const tecnicosComEstatisticas = tecnicosData?.map(tecnico => {
         const agendamentosTecnico = agendamentosHoje?.filter(ag => ag.tecnico_id === tecnico.user_id) || [];
         const statusAtual = agendamentosTecnico.find(ag => ag.status === 'em_andamento')?.status || 
-                           agendamentosTecnico.find(ag => ag.status === 'em_deslocamento')?.status || 
-                           agendamentosTecnico.find(ag => ag.status === 'agendado')?.status || 
-                           'livre';
+                          agendamentosTecnico.find(ag => ag.status === 'em_deslocamento')?.status || 
+                          agendamentosTecnico.find(ag => ag.status === 'agendado')?.status || 
+                          'livre';
         
         return {
           id: tecnico.user_id,
@@ -101,35 +104,39 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Erro ao buscar técnicos:', error);
     }
-    console.log("TÉCNICOS:", tecnicos);
   };
 
-  const fetchAgendamentos = async () => {
-    try {
-      const hoje = new Date();
-      const inicio = new Date(hoje.setHours(0, 0, 0, 0)).toISOString();
-      const fim = new Date(hoje.setHours(23, 59, 59, 999)).toISOString();
 
-      const { data, error } = await supabase
-        .from('agendamentos')
-        .select(`*, profiles!agendamentos_tecnico_id_fkey(name)`)
-        .gte('data', inicio)
-        .lte('data', fim)
-        .order('horario');
-      
-      if (error) throw error;
+ const fetchAgendamentos = async () => {
+  try {
+    // Gera string no formato "YYYY-MM-DD" local sem hora
+    const ano = dataSelecionada.getFullYear();
+    const mes = String(dataSelecionada.getMonth() + 1).padStart(2, "0");
+    const dia = String(dataSelecionada.getDate()).padStart(2, "0");
+    const dataFormatada = `${ano}-${mes}-${dia}`;
 
-      const agendamentosFormatados = data?.map(ag => ({
-        ...ag,
-        tecnico: ag.profiles?.name || 'N/A'
-      })) || [];
+    console.log("Buscando agendamentos para a data:", dataFormatada);
 
-      setAgendamentos(agendamentosFormatados);
-    } catch (error) {
-      console.error('Erro ao buscar agendamentos:', error);
-    }
-    console.log("AGENDAMENTOS HOJE:", agendamentos);
-  };
+    const { data, error } = await supabase
+      .from('agendamentos')
+      .select(`*, profiles!agendamentos_tecnico_id_fkey(name)`)
+      .eq('data', dataFormatada)
+      .order('horario');
+
+    if (error) throw error;
+
+    const agendamentosFormatados = data?.map(ag => ({
+      ...ag,
+      tecnico: ag.profiles?.name || 'N/A'
+    })) || [];
+
+    setAgendamentos(agendamentosFormatados);
+  } catch (error) {
+    console.error('Erro ao buscar agendamentos:', error);
+  }
+};
+
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -139,6 +146,13 @@ const Dashboard = () => {
       default: return "default";
     }
   };
+
+  function formatarData(data: string) {
+    // Evita conversão para UTC
+    const [ano, mes, dia] = data.split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -286,9 +300,24 @@ const Dashboard = () => {
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Agendamentos do Dia</CardTitle>
-              <CardDescription>Lista completa dos agendamentos programados</CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+              <div>
+                <CardTitle>Agendamentos do Dia</CardTitle>
+                <CardDescription>
+                  Lista completa dos agendamentos programados
+                </CardDescription>
+              </div>
+              <div>
+                <Input 
+                  type="date" 
+                  value={dataSelecionada.toLocaleDateString("sv-SE")} // formato ISO sem fuso
+                  onChange={(e) => {
+                    const [ano, mes, dia] = e.target.value.split("-");
+                    setDataSelecionada(new Date(Number(ano), Number(mes) - 1, Number(dia)));
+                  }}
+                  className="w-[180px]"
+                />
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
               <div className="relative">
@@ -339,7 +368,14 @@ const Dashboard = () => {
                     </div>
                     <h3 className="font-medium text-foreground">{agendamento.cliente}</h3>
                   </div>
-                  <span className="text-sm font-medium text-primary">{agendamento.horario}</span>
+                  <div className="sm:hidden text-sm text-muted-foreground">
+                    {formatarData(agendamento.data)} - {agendamento.horario}
+                  </div>
+                  <div className="text-right sm:block hidden">
+                    <span className="block text-sm text-muted-foreground">{formatarData(agendamento.data)}</span>
+                    <span className="text-2xl font-bold text-primary">{agendamento.horario}</span>
+                  </div>
+
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">

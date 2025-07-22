@@ -32,14 +32,7 @@ const Navigation = ({ currentView, onViewChange }: NavigationProps) => {
                 <Monitor className="mr-2 h-4 w-4" />
                 Dashboard
               </Button>
-              <Button
-                variant={currentView === "tecnico" ? "default" : "outline"}
-                onClick={() => onViewChange("tecnico")}
-                className="flex items-center"
-              >
-                <Users className="mr-2 h-4 w-4" />
-                Visão Técnico
-              </Button>
+              
             </div>
           )}
         </div>
