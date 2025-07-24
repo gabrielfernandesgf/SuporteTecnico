@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,13 @@ interface NovoEncaixeDialogProps {
   onEncaixeCriado: () => void;
 }
 
+
 const NovoEncaixeDialog = ({ onEncaixeCriado }: NovoEncaixeDialogProps) => {
   const { toast } = useToast();
   const { userProfile } = useAuth();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [tecnicos, setTecnicos] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     id: '',
@@ -25,8 +27,26 @@ const NovoEncaixeDialog = ({ onEncaixeCriado }: NovoEncaixeDialogProps) => {
     endereco: '',
     tipo: '',
     urgencia: 'Baixa',
-    observacoes: ''
+    observacoes: '',
+    tecnico_id: ''
   });
+
+  useEffect(() => {
+    const carregarTecnicos = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_id, name')
+        .eq('role', 'tecnico');
+
+      if (error) {
+        console.error('Erro ao carregar técnicos:', error);
+      } else {
+        setTecnicos(data);
+      }
+    };
+
+    carregarTecnicos();
+  }, []);
 
   const tiposAtendimento = [
     'Treinamento',
@@ -53,7 +73,8 @@ const NovoEncaixeDialog = ({ onEncaixeCriado }: NovoEncaixeDialogProps) => {
         endereco: '',
         tipo: '',
         urgencia: 'Baixa',
-        observacoes: ''
+        observacoes: '',
+        tecnico_id: ''
       });
     }
   };
@@ -82,6 +103,7 @@ const NovoEncaixeDialog = ({ onEncaixeCriado }: NovoEncaixeDialogProps) => {
           tipo: formData.tipo,
           urgencia: formData.urgencia,
           observacoes: formData.observacoes,
+          tecnico_id: formData.tecnico_id || null,
           status: 'disponivel'
         });
       
@@ -187,7 +209,21 @@ const NovoEncaixeDialog = ({ onEncaixeCriado }: NovoEncaixeDialogProps) => {
                 </SelectContent>
               </Select>
             </div>
-
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="tecnico_id">Técnico Responsável (opcional)</Label>
+              <Select onValueChange={(value) => setFormData(prev => ({ ...prev, tecnico_id: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o técnico" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tecnicos.map(tecnico => (
+                    <SelectItem key={tecnico.user_id} value={tecnico.user_id}>
+                      {tecnico.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <label htmlFor="observacoes">Observações</label>
               <textarea

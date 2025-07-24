@@ -13,15 +13,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
   MapPin,
-  Clock,
   Calendar,
   User,
   FileText,
   Timer,
-  Navigation,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
+import EditarAgendamentoDialog from "./EditarAgendamentoDialog";
 
 
 interface AgendamentoDetailsDialogProps {
@@ -31,12 +30,14 @@ interface AgendamentoDetailsDialogProps {
 }
 
 const AgendamentoDetailsDialog = ({
-  agendamento,
+  agendamento: agendamentoInicial,
   onAgendamentoAtualizado,
   children,
 }: AgendamentoDetailsDialogProps) => {
+  const [agendamento, setAgendamento] = useState(agendamentoInicial);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [editarAberto, setEditarAberto] = useState(false);
 
   const formatTime = (timeString: string) => {
     if (!timeString) return "N/A";
@@ -117,6 +118,7 @@ const AgendamentoDetailsDialog = ({
   }
 
   return (
+    <>
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
@@ -154,6 +156,13 @@ const AgendamentoDetailsDialog = ({
                   {agendamento.endereco}
                 </p>
               </div>
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Ponto de Referência
+                </Label>
+                <p className="text-sm">{agendamento.ponto_referencia || "N/A"}</p>
+              </div>
+
               <div>
                 <Label className="text-sm font-medium text-muted-foreground">
                   Tipo de Serviço
@@ -283,13 +292,13 @@ const AgendamentoDetailsDialog = ({
             </Card>
           )}
 
-          {/* Botão de Cancelar (somente se status for "agendado") */}
+          {/* Botão de Editar (somente se status for "agendado") */}
           {agendamento.status === "agendado" && (
-            <div className="flex justify-end">
-              <Button
-                variant="destructive"
-                onClick={() => setCancelDialogOpen(true)}
-              >
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditarAberto(true)}>
+                Editar Agendamento
+              </Button>
+              <Button variant="destructive" onClick={() => setCancelDialogOpen(true)}>
                 Cancelar Agendamento
               </Button>
             </div>
@@ -322,6 +331,18 @@ const AgendamentoDetailsDialog = ({
         )}
       </DialogContent>
     </Dialog>
+    {/* ✅ Modal de edição fora do Dialog principal */}
+    <EditarAgendamentoDialog
+      agendamento={agendamento}
+      open={editarAberto}
+      onFechar={() => setEditarAberto(false)}
+      onAtualizar={(agendamentoAtualizado) => {
+        setEditarAberto(false);
+        setAgendamento(agendamentoAtualizado); // atualiza a tela com novos dados
+        if (onAgendamentoAtualizado) onAgendamentoAtualizado();
+      }}
+    />
+  </>
   );
 };
 

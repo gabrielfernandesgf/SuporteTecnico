@@ -10,6 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import NovoAgendamentoDialog from "@/components/NovoAgendamentoDialog";
 import NovoEncaixeDialog from "@/components/NovoEncaixeDialog";
 import AgendamentoDetailsDialog from "@/components/AgendamentoDetailsDialog";
+import { useNavigate } from "react-router-dom";
+
+
 
 const Dashboard = () => {
   const { userProfile, user } = useAuth();
@@ -20,6 +23,7 @@ const Dashboard = () => {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [buscaTexto, setBuscaTexto] = useState("");
   const [dataSelecionada, setDataSelecionada] = useState(new Date());
+  const navigate = useNavigate();
 
  useEffect(() => {
     if (user && userProfile?.role === 'secretaria') {
@@ -143,6 +147,7 @@ const Dashboard = () => {
       case "agendado": return "agendado";
       case "em_andamento": return "em_andamento";
       case "finalizado": return "finalizado";
+      case "cancelado": return "destructive";
       default: return "default";
     }
   };
@@ -159,6 +164,7 @@ const Dashboard = () => {
       case "agendado": return "Agendado";
       case "em_andamento": return "Em Andamento";
       case "finalizado": return "Finalizado";
+      case "cancelado": return "Cancelado";
       default: return status;
     }
   };
@@ -243,7 +249,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card onClick={() => navigate("/encaixes")} className="cursor-pointer hover:bg-accent transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Encaixes Disponíveis</CardTitle>
             <MapPin className="h-4 w-4 text-muted-foreground" />
