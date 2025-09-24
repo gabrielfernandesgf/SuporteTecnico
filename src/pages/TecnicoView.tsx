@@ -1,586 +1,355 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Clock, MapPin, Navigation, CheckCircle, Play, FileText } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Clock, MapPin, CheckCircle, Play, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  listarMeusAgendamentos,
+  registrarSaida,
+  registrarChegada,
+  finalizarComAssinatura,
+  type Coords,
+} from "@/services/tecnico";
+import { listarEncaixesDoTecnico } from "@/services/encaixes";
 
-const TecnicoView = () => {
-  const { toast } = useToast();
-  const { userProfile, user } = useAuth();
-  const [observacoes, setObservacoes] = useState("");
-  const [agendamentos, setAgendamentos] = useState<any[]>([]);
-  const [encaixes, setEncaixes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
+/* ====== Assinatura (canvas) — mantido ====== */
+function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawing = useRef(false);
   useEffect(() => {
-  if (user && userProfile?.role === 'tecnico') {
-    fetchAgendamentos();
-    fetchEncaixes();
-    solicitarPermissaoLocalizacao();
-  }
-}, [user, userProfile]);
-
-const solicitarPermissaoLocalizacao = () => {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      () => {},
-      () => {
-        toast({
-          title: "Aviso",
-          description: "Você precisa permitir o acesso à localização para registrar chegada no cliente.",
-          variant: "destructive"
-        });
-      }
-    );
-  }
-};
-
-
-  const fetchAgendamentos = async () => {
-    try {
-      const hoje = new Date();
-
-      // Formata a data no formato YYYY-MM-DD respeitando o fuso horário local
-      const dataFormatada = hoje.toLocaleDateString('sv-SE'); // 'sv-SE' => yyyy-mm-dd
-
-      const { data, error } = await supabase
-        .from('agendamentos')
-        .select('*')
-        .eq('tecnico_id', user?.id)
-        .eq('data', dataFormatada) // <- comparação correta para campo Date (sem hora)
-        .order('horario');
-
-      if (error) throw error;
-
-      setAgendamentos(data || []);
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar os agendamentos",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    function fit() {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const parentW = canvas.parentElement?.clientWidth ?? 320;
+      const w = Math.min(600, parentW);
+      const h = Math.round(w * 0.4);
+      canvas.width = w * ratio; canvas.height = h * ratio;
+      canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = 2;
+      ctx.strokeStyle = "#111827";
     }
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+  const pos = (e: any) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX ?? e.touches?.[0]?.clientX) - rect.left;
+    const y = (e.clientY ?? e.touches?.[0]?.clientY) - rect.top;
+    return { x, y };
   };
-
-
-  const fetchEncaixes = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('encaixes')
-        .select('*')
-        .eq('status', 'disponivel')
-        .order('urgencia', { ascending: false });
-      
-      if (error) throw error;
-      setEncaixes(data || []);
-    } catch (error) {
-      // Erro ao buscar encaixes
-    }
+  const start = (e: any) => { drawing.current = true; const { x, y } = pos(e); const ctx = canvasRef.current!.getContext("2d")!; ctx.beginPath(); ctx.moveTo(x, y); };
+  const move = (e: any) => { if (!drawing.current) return; const { x, y } = pos(e); const ctx = canvasRef.current!.getContext("2d")!; ctx.lineTo(x, y); ctx.stroke(); };
+  const end = () => { drawing.current = false; onChange(canvasRef.current!.toDataURL("image/png")); };
+  const clear = () => {
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    onChange(null);
   };
-
-  const registrarSaida = async (agendamentoId: string) => {
-    const agora = new Date();
-    
-    try {
-      const { error } = await supabase
-        .from('agendamentos')
-        .update({
-          status: 'em_deslocamento',
-          saida_horario: agora.toISOString()
-        })
-        .eq('id', agendamentoId);
-      
-      if (error) throw error;
-      
-      setAgendamentos(prev => 
-        prev.map(ag => 
-          ag.id === agendamentoId 
-            ? { ...ag, saida_horario: agora.toISOString(), status: 'em_deslocamento' }
-            : ag
-        )
-      );
-      
-      toast({
-        title: "Saída registrada!",
-        description: `Saída registrada às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível registrar a saída",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const registrarChegada = async (agendamentoId: string) => {
-    const agora = new Date();
-
-    if (!navigator.geolocation) {
-      toast({
-        title: "Erro",
-        description: "Seu navegador não suporta geolocalização.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-
-      try {
-        const { error } = await supabase
-          .from('agendamentos')
-          .update({
-            status: 'em_andamento',
-            chegada_horario: agora.toISOString(),
-            localizacao_chegada: `${latitude},${longitude}`
-          })
-          .eq('id', agendamentoId);
-
-        if (error) throw error;
-
-        setAgendamentos(prev =>
-          prev.map(ag =>
-            ag.id === agendamentoId
-              ? {
-                  ...ag,
-                  chegada_horario: agora.toISOString(),
-                  status: 'em_andamento',
-                  localizacao_chegada: `${latitude},${longitude}`
-                }
-              : ag
-          )
-        );
-
-        toast({
-          title: "Chegada registrada!",
-          description: `Localização salva: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
-        });
-      } catch (error) {
-        toast({
-          title: "Erro",
-          description: "Erro ao salvar localização da chegada",
-          variant: "destructive"
-        });
-      }
-    }, () => {
-      toast({
-        title: "Erro",
-        description: "Permissão de localização negada",
-        variant: "destructive"
-      });
-    });
-  };
-
-
-  const calcularTempoMinutos = (inicio: string, fim: string): number => {
-    const inicioDate = new Date(inicio);
-    const fimDate = new Date(fim);
-    return Math.round((fimDate.getTime() - inicioDate.getTime()) / (1000 * 60));
-  };
-
-  const finalizarAtendimento = async (agendamentoId: string) => {
-    const agora = new Date();
-    const agendamento = agendamentos.find(ag => ag.id === agendamentoId);
-    
-    if (!agendamento) return;
-    
-    const tempoDeslocamento = agendamento.saida_horario && agendamento.chegada_horario 
-      ? calcularTempoMinutos(agendamento.saida_horario, agendamento.chegada_horario)
-      : null;
-    
-    const tempoAtendimento = agendamento.chegada_horario 
-      ? calcularTempoMinutos(agendamento.chegada_horario, agora.toISOString())
-      : null;
-    
-    try {
-      const { error } = await supabase
-        .from('agendamentos')
-        .update({
-          status: 'finalizado',
-          finalizacao_horario: agora.toISOString(),
-          observacoes: observacoes || agendamento.observacoes,
-          tempo_deslocamento: tempoDeslocamento,
-          tempo_atendimento: tempoAtendimento
-        })
-        .eq('id', agendamentoId);
-      
-      if (error) throw error;
-      
-      setAgendamentos(prev => 
-        prev.map(ag => 
-          ag.id === agendamentoId 
-            ? { 
-                ...ag, 
-                finalizacao_horario: agora.toISOString(), 
-                status: 'finalizado',
-                observacoes: observacoes || ag.observacoes,
-                tempo_deslocamento: tempoDeslocamento,
-                tempo_atendimento: tempoAtendimento
-              }
-            : ag
-        )
-      );
-      
-      setObservacoes("");
-      
-      toast({
-        title: "Atendimento finalizado!",
-        description: `Atendimento concluído às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível finalizar o atendimento",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "agendado": return "agendado";
-      case "em_deslocamento": return "warning";
-      case "em_andamento": return "em_andamento";
-      case "finalizado": return "finalizado";
-      default: return "default";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "agendado": return "Agendado";
-      case "em_deslocamento": return "Em Deslocamento";
-      case "em_andamento": return "Em Andamento";
-      case "finalizado": return "Finalizado";
-      default: return status;
-    }
-  };
-
-  const aceitarEncaixe = async (encaixeId: string) => {
-    try {
-      const { data: encaixe, error: fetchError } = await supabase
-        .from('encaixes')
-        .select("*")
-        .eq('id', encaixeId)
-        .single();
-      
-      if (fetchError ) throw fetchError;
-
-      
-      const novoAgendamento = {
-      id: encaixe.id,
-      cliente: encaixe.cliente,
-      endereco: encaixe.endereco,
-      tipo: encaixe.tipo || "treinamento",
-      tecnico_id: user?.id,
-      status: "agendado",
-      origem: "encaixe",
-      // observacoes: encaixe.observacoes || null, // Removido pois não existe no tipo encaixe
-      observacoes: null,
-      data: new Date().toISOString().split("T")[0],
-      horario: new Date().toTimeString().split(" ")[0],
-    };
-
-    // Removido console.log de produção
-    const { error: insetError } = await supabase
-      .from('agendamentos')
-      .insert(novoAgendamento);
-
-   if (insetError) {
-    // Erro detalhado no insert
-  }
-
-
-      if (!user?.id) throw new Error("Usuário técnico não autenticado.");
-
-      if (insetError) throw insetError;
-
-      const { error: updateError } = await supabase
-      .from("encaixes")
-      .update({ status: "aceito", aceito_por: user?.id })
-      .eq("id", encaixeId);
-
-      if (updateError) throw updateError;
-
-      setEncaixes((prev) => prev.filter((e) => e.id !== encaixeId));
-
-      toast({
-        title: "Encaixe aceito!",
-        description: "O encaixe foi adicionado à sua agenda.",
-      });
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível aceitar o encaixe",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const formatarHorario = (horarioISO: string) => {
-    if (!horarioISO) return '';
-    return new Date(horarioISO).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatarTempo = (minutos: number | null) => {
-    if (!minutos) return '';
-    const horas = Math.floor(minutos / 60);
-    const mins = minutos % 60;
-    if (horas > 0) {
-      return `${horas}h ${mins}min`;
-    }
-    return `${mins}min`;
-  };
-
-  function formatarData(data: string) {
-  return new Date(data).toLocaleDateString('pt-BR', {
-    timeZone: 'America/Sao_Paulo'
-  });
+  return (
+    <div className="space-y-2">
+      <canvas
+        ref={canvasRef}
+        className="border rounded-md bg-white touch-none"
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+      />
+      <div className="text-xs text-muted-foreground">Assine no quadro acima</div>
+      <div className="flex gap-2">
+        <Button type="button" variant="secondary" onClick={clear}>Limpar</Button>
+      </div>
+    </div>
+  );
 }
 
+/* ==================== Página ==================== */
+export default function TecnicoView() {
+  const { toast } = useToast();
+  const { userProfile } = useAuth();
+  const tecnicoId = Number(userProfile?.user_id ?? 0);
 
-  const renderBotaoAcao = (agendamento: any) => {
-    if (agendamento.status === "agendado") {
-      return (
-        <Button 
-          onClick={() => registrarSaida(agendamento.id)}
-          className="bg-primary hover:bg-primary-hover w-full"
-        >
-          <Play className="mr-2 h-4 w-4" />
-          Confirmar Saída
-        </Button>
-      );
-    } else if (agendamento.status === "em_deslocamento") {
-      return (
-        <Button 
-          onClick={() => registrarChegada(agendamento.id)}
-          className="bg-warning hover:bg-warning/80 w-full"
-        >
-          <MapPin className="mr-2 h-4 w-4" />
-          Confirmar Chegada
-        </Button>
-      );
-    } else if (agendamento.status === "em_andamento") {
-      return (
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="bg-success hover:bg-success/80 w-full">
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Finalizar Atendimento
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Finalizar Atendimento</DialogTitle>
-              <DialogDescription>
-                Adicione observações sobre o atendimento realizado (opcional).
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Textarea
-                placeholder="Observações sobre o atendimento..."
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                rows={4}
-              />
-              <Button 
-                onClick={() => finalizarAtendimento(agendamento.id)}
-                className="w-full bg-success hover:bg-success/80"
-              >
-                Confirmar Finalização
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      );
-    } else {
-      return (
-        <Button disabled className="w-full">
-          <CheckCircle className="mr-2 h-4 w-4" />
-          Finalizado
-        </Button>
-      );
-    }
-  };
+  const [loading, setLoading] = useState(true);
+  const [agendamentos, setAgendamentos] = useState<any[]>([]);
+  const [encAbertos, setEncAbertos] = useState<any[]>([]);
+  const [encPendentes, setEncPendentes] = useState<any[]>([]);
 
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6 bg-background min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Carregando agendamentos...</p>
-        </div>
-      </div>
-    );
+  // filtro de dia
+  const [dia, setDia] = useState<"ontem" | "hoje" | "amanha">("hoje");
+
+  // finalizar (modal)
+  const [finOpen, setFinOpen] = useState(false);
+  const [finId, setFinId] = useState<string | null>(null);
+  const [finObs, setFinObs] = useState("");
+  const [finAss, setFinAss] = useState<string | null>(null);
+
+  const formatHora = (iso?: string) => iso ? iso.slice(11, 16) : "";
+  const formatDataPt = (d?: string) => (!d ? "" : `${d.split("-")[2]}/${d.split("-")[1]}/${d.split("-")[0]}`);
+  const statusColor = (s: string) =>
+    s === "agendado" ? "agendado" :
+    s === "em_deslocamento" ? "warning" :
+    s === "em_andamento" ? "em_andamento" :
+    s === "finalizado" ? "finalizado" : "default";
+  const statusLabel = (s: string) =>
+    s === "agendado" ? "agendado" :
+    s === "em_deslocamento" ? "em deslocamento" :
+    s === "em_andamento" ? "em andamento" :
+    s === "finalizado" ? "finalizado" : s?.replace("_", " ");
+
+  const toYMD = (d: Date) => d.toISOString().slice(0, 10);
+  const hoje = new Date();
+  const yOntem = toYMD(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1));
+  const yHoje = toYMD(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()));
+  const yAmanha = toYMD(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1));
+  const alvoYMD = dia === "ontem" ? yOntem : dia === "amanha" ? yAmanha : yHoje;
+
+  const agendamentosFiltrados = useMemo(
+    () => agendamentos.filter(a => a.data === alvoYMD),
+    [agendamentos, alvoYMD]
+  );
+
+  useEffect(() => {
+    (async () => {
+      if (!tecnicoId || userProfile?.role !== "tecnico") { setLoading(false); return; }
+      try {
+        // permissões de geoloc não bloqueiam a tela
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(() => {}, () => {});
+        }
+        const [ags, abertos, pend] = await Promise.all([
+          listarMeusAgendamentos(tecnicoId),
+          listarEncaixesDoTecnico(tecnicoId, "A").catch(() => []),
+          listarEncaixesDoTecnico(tecnicoId, "P").catch(() => []),
+        ]);
+        setAgendamentos(ags);
+        setEncAbertos(abertos ?? []);
+        setEncPendentes(pend ?? []);
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Erro", description: "Não foi possível carregar sua agenda", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [tecnicoId, userProfile?.role, toast]);
+
+  // helpers localização
+  async function getCoords(): Promise<Coords | undefined> {
+    if (!navigator.geolocation) return undefined;
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(undefined),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
   }
 
-  if (!userProfile || userProfile.role !== 'tecnico') {
-    return (
-      <div className="p-6 space-y-6 bg-background min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">Acesso negado. Esta área é apenas para técnicos.</p>
-        </div>
-      </div>
-    );
+  // ações do agendamento (técnico ainda pode operar no agendamento)
+  async function onSaida(id: string) {
+    try {
+      const geo = await getCoords();
+      await registrarSaida(id, tecnicoId, geo);
+      setAgendamentos(p => p.map(a => a.id === id ? { ...a, saida_horario: new Date().toISOString(), status: "em_deslocamento" } : a));
+      toast({ title: "Saída registrada", description: "Boa rota!" });
+    } catch {
+      toast({ title: "Erro", description: "Falha ao registrar saída", variant: "destructive" });
+    }
+  }
+  async function onChegada(id: string) {
+    try {
+      const geo = await getCoords();
+      await registrarChegada(id, tecnicoId, geo);
+      const now = new Date().toISOString();
+      setAgendamentos(p => p.map(a => a.id === id ? { ...a, chegada_horario: now, status: "em_andamento" } : a));
+      toast({ title: "Chegada registrada" });
+    } catch {
+      toast({ title: "Erro", description: "Falha ao registrar chegada", variant: "destructive" });
+    }
+  }
+  function resetFinalizacaoState() { setFinId(null); setFinObs(""); setFinAss(null); }
+  async function onFinalizar() {
+    if (!finId) return;
+    try {
+      const geo = await getCoords();
+      await finalizarComAssinatura(finId, tecnicoId, finObs, finAss ?? undefined, geo);
+      setAgendamentos(prev => prev.map(a => a.id === finId ? { ...a, finalizacao_horario: new Date().toISOString(), status: "finalizado" } : a));
+      resetFinalizacaoState();
+      setFinOpen(false);
+      toast({ title: "Atendimento finalizado" });
+    } catch {
+      toast({ title: "Erro", description: "Falha ao finalizar", variant: "destructive" });
+    }
+  }
+
+  if (loading) {
+    return <div className="p-6 min-h-screen flex items-center justify-center text-muted-foreground">Carregando…</div>;
+  }
+  if (!userProfile || userProfile.role !== "tecnico") {
+    return <div className="p-6 min-h-screen flex items-center justify-center text-muted-foreground">Acesso negado.</div>;
   }
 
   return (
-    <div className="p-6 space-y-6 bg-background min-h-screen">
-      {/* Header */}
+    <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Olá, {userProfile?.name}!</h1>
-        <p className="text-muted-foreground mt-1">Sua agenda do dia - {new Date().toLocaleDateString('pt-BR')}</p>
+        <h1 className="text-3xl font-bold">Olá, {userProfile.name || `Técnico ${userProfile.user_id}`}</h1>
+        <p className="text-muted-foreground mt-1">Tenha um ótimo dia de trabalho!</p>
       </div>
 
-      {/* Agendamentos do Dia */}
+      {/* ====== MEUS ENCAIXES (A e P) — SOMENTE VISUALIZAÇÃO ====== */}
       <Card>
         <CardHeader>
-          <CardTitle>Meus Agendamentos Hoje</CardTitle>
-          <CardDescription>Clique nos botões para registrar cada etapa do atendimento</CardDescription>
+          <CardTitle>Meus Encaixes</CardTitle>
+          <CardDescription>Você só visualiza seus encaixes. Ações são feitas pela secretaria/gerência.</CardDescription>
         </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <h4 className="font-semibold mb-2">Abertos</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {encAbertos.map((e: any) => (
+                <div key={`enc-a-${e.chave ?? e.id}`} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-xs text-muted-foreground">#{`ENC-${e.chave ?? e.id}`}</div>
+                      <div className="font-semibold">{e.nomeCliente ?? e.cliente}</div>
+                      {e.foneCliente && <div className="text-sm text-muted-foreground">{e.foneCliente}</div>}
+                    </div>
+                    <Badge variant="secondary">aberto</Badge>
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-2">
+                    Abertura: {e.dataHoraAbertura ? new Date(e.dataHoraAbertura).toLocaleString() : "—"}
+                  </div>
+                </div>
+              ))}
+              {encAbertos.length === 0 && <div className="text-sm text-muted-foreground col-span-full">Sem encaixes abertos.</div>}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Aguardando autorização</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {encPendentes.map((e: any) => (
+                <div key={`enc-p-${e.chave ?? e.id}`} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-xs text-muted-foreground">#{`ENC-${e.chave ?? e.id}`}</div>
+                      <div className="font-semibold">{e.nomeCliente ?? e.cliente}</div>
+                      {e.foneCliente && <div className="text-sm text-muted-foreground">{e.foneCliente}</div>}
+                    </div>
+                    <Badge variant="secondary">aguardando</Badge>
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-2">
+                    Abertura: {e.dataHoraAbertura ? new Date(e.dataHoraAbertura).toLocaleString() : "—"}
+                  </div>
+                </div>
+              ))}
+              {encPendentes.length === 0 && <div className="text-sm text-muted-foreground col-span-full">Sem encaixes pendentes.</div>}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ====== MEUS AGENDAMENTOS ====== */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Meus Agendamentos</CardTitle>
+              <CardDescription>Registre saída, chegada e finalização com assinatura</CardDescription>
+            </div>
+            <div className="inline-flex rounded-md shadow-sm overflow-hidden border">
+              <Button type="button" variant={dia === "ontem" ? "default" : "ghost"} className="rounded-none" onClick={() => setDia("ontem")}>Ontem</Button>
+              <Button type="button" variant={dia === "hoje" ? "default" : "ghost"} className="rounded-none" onClick={() => setDia("hoje")}>Hoje</Button>
+              <Button type="button" variant={dia === "amanha" ? "default" : "ghost"} className="rounded-none" onClick={() => setDia("amanha")}>Amanhã</Button>
+            </div>
+          </div>
+        </CardHeader>
+
         <CardContent>
           <div className="space-y-6">
-            {agendamentos.map((agendamento) => (
-              <div key={agendamento.id} className="border rounded-lg p-6">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground">#{agendamento.id}</span>
-                      <Badge variant={getStatusColor(agendamento.status)}>
-                        {getStatusText(agendamento.status)}
-                      </Badge>
+            {agendamentosFiltrados.map((ag) => {
+              const podeSair = ag.status === "agendado";
+              const podeChegada = ag.status === "em_deslocamento";
+              const podeFinalizar = ag.status === "em_andamento";
+              return (
+                <div key={`${ag.id}-${ag.data}-${ag.horario}`} className="border rounded-lg p-6">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">#{ag.id}</span>
+                        <Badge variant={statusColor(ag.status)}>{statusLabel(ag.status)}</Badge>
+                      </div>
+                      <h3 className="text-lg font-medium">{ag.cliente}</h3>
                     </div>
-                    <h3 className="text-xl font-medium text-foreground">{agendamento.cliente}</h3>
+                    <div className="sm:text-right">
+                      <span className="block text-sm text-muted-foreground">{formatDataPt(ag.data)}</span>
+                      <span className="text-2xl font-bold text-primary">{ag.horario}</span>
+                      <p className="text-sm text-muted-foreground">{ag.tipo}</p>
+                    </div>
                   </div>
-                  <div className="sm:text-right">
-                    <span className="block text-sm text-muted-foreground"> {formatarData(agendamento.data)} </span>
-                    <span className="text-xl sm:text-2xl font-bold text-primary block">{agendamento.horario}</span>
-                    <p className="text-sm text-muted-foreground">{agendamento.tipo}</p>
-                  </div>
-                </div>
 
-                
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-start">
-                    <MapPin className="mr-2 h-5 w-5 text-muted-foreground mt-0.5" />
-                    <span className="text-foreground">{agendamento.endereco}</span>
-                  </div>
-                  
-                  {agendamento.observacoes && (
+                  <div className="space-y-3 mb-4">
                     <div className="flex items-start">
-                      <FileText className="mr-2 h-5 w-5 text-muted-foreground mt-0.5" />
-                      <span className="text-foreground">{agendamento.observacoes}</span>
+                      <MapPin className="mr-2 h-5 w-5 text-muted-foreground mt-0.5" />
+                      <span>{ag.endereco}</span>
+                    </div>
+                    {ag.observacoes && (
+                      <div className="flex items-start">
+                        <FileText className="mr-2 h-5 w-5 text-muted-foreground mt-0.5" />
+                        <span>{ag.observacoes}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {(ag.saida_horario || ag.chegada_horario || ag.finalizacao_horario) && (
+                    <div className="bg-muted/50 rounded-lg p-4 mb-4">
+                      <h4 className="font-medium mb-2">Timeline</h4>
+                      <div className="space-y-1 text-sm">
+                        {ag.saida_horario && <div className="flex items-center"><Clock className="mr-2 h-4 w-4" />Saída: {formatHora(ag.saida_horario)}</div>}
+                        {ag.chegada_horario && <div className="flex items-center"><Clock className="mr-2 h-4 w-4" />Chegada: {formatHora(ag.chegada_horario)}</div>}
+                        {ag.finalizacao_horario && <div className="flex items-center"><Clock className="mr-2 h-4 w-4" />Finalização: {formatHora(ag.finalizacao_horario)}</div>}
+                      </div>
                     </div>
                   )}
-                </div>
 
-                {/* Timeline de Horários */}
-                {(agendamento.saida_horario || agendamento.chegada_horario || agendamento.finalizacao_horario) && (
-                  <div className="bg-muted/50 rounded-lg p-4 mb-4">
-                    <h4 className="font-medium text-foreground mb-2">Timeline do Atendimento</h4>
-                    <div className="space-y-2 text-sm">
-                      {agendamento.saida_horario && (
-                        <div className="flex items-center">
-                          <Clock className="mr-2 h-4 w-4 text-primary" />
-                          <span>Saída: {formatarHorario(agendamento.saida_horario)}</span>
-                        </div>
-                      )}
-                      {agendamento.chegada_horario && (
-                        <div className="flex items-center">
-                          <Clock className="mr-2 h-4 w-4 text-warning" />
-                          <span>Chegada: {formatarHorario(agendamento.chegada_horario)}</span>
-                        </div>
-                      )}
-                      {agendamento.finalizacao_horario && (
-                        <div className="flex items-center">
-                          <Clock className="mr-2 h-4 w-4 text-success" />
-                          <span>Finalização: {formatarHorario(agendamento.finalizacao_horario)}</span>
-                        </div>
-                      )}
-                      {(agendamento.tempo_deslocamento || agendamento.tempo_atendimento) && (
-                        <div className="pt-2 border-t border-border space-y-1">
-                          {agendamento.tempo_deslocamento && (
-                            <div className="text-muted-foreground">
-                              Tempo de deslocamento: <span className="font-medium text-foreground">{formatarTempo(agendamento.tempo_deslocamento)}</span>
-                            </div>
-                          )}
-                          {agendamento.tempo_atendimento && (
-                            <div className="text-muted-foreground">
-                              Tempo de atendimento: <span className="font-medium text-foreground">{formatarTempo(agendamento.tempo_atendimento)}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Button className="w-full" onClick={() => onSaida(ag.id)} disabled={!podeSair}><Play className="mr-2 h-4 w-4" /> Saída</Button>
+                    <Button className="w-full" variant="secondary" onClick={() => onChegada(ag.id)} disabled={!podeChegada}><MapPin className="mr-2 h-4 w-4" /> Chegada</Button>
+                    <Button className="w-full" onClick={() => { setFinId(ag.id); setFinOpen(true); }} disabled={!podeFinalizar}><CheckCircle className="mr-2 h-4 w-4" /> Finalizar</Button>
                   </div>
-                )}
-
-                {/* Botão de Ação */}
-                <div className="flex justify-end">
-                  {renderBotaoAcao(agendamento)}
                 </div>
-              </div>
-            ))}
+              );
+            })}
+            {agendamentosFiltrados.length === 0 && (
+              <div className="text-center text-sm text-muted-foreground">Nenhum agendamento nesse dia.</div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Encaixes Disponíveis */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Encaixes Disponíveis</CardTitle>
-          <CardDescription>Atendimentos extras que você pode realizar após finalizar sua agenda</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {encaixes.map((encaixe) => (
-              <div key={encaixe.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-medium text-foreground">{encaixe.cliente}</h3>
-                  <Badge variant={encaixe.urgencia === "Alta" ? "destructive" : "secondary"}>
-                    {encaixe.urgencia}
-                  </Badge>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center text-muted-foreground">
-                    <MapPin className="mr-2 h-4 w-4" />
-                    {encaixe.endereco}
-                  </div>
-                  <div className="text-muted-foreground">
-                    Tipo: {encaixe.tipo}
-
-                    {encaixe.observacoes && (
-                    <div className="text-sm text-muted-foreground">
-                      <strong>Observações:</strong> {encaixe.observacoes}
-                    </div>
-                  )}
-                  </div>
-                </div>
-                <Button 
-                  variant="outline" 
-                  className="w-full mt-3"
-                  onClick={() => aceitarEncaixe(encaixe.id)}
-                >
-                  <Navigation className="mr-2 h-4 w-4" />
-                  Aceitar Encaixe
-                </Button>
-              </div>
-            ))}
+      {/* Dialog Finalização */}
+      <Dialog open={finOpen} onOpenChange={(o) => { setFinOpen(o); if (!o) resetFinalizacaoState(); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Finalizar atendimento {finId ? `#${finId}` : ""}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <Textarea placeholder="Observações do atendimento (opcional)" value={finObs} onChange={(e) => setFinObs(e.target.value)} />
+            <SignaturePad onChange={setFinAss} />
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => { setFinOpen(false); resetFinalizacaoState(); }}>Cancelar</Button>
+              <Button onClick={onFinalizar} disabled={!finId}>Confirmar Finalização</Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
-
-export default TecnicoView;
+}

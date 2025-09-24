@@ -1,144 +1,159 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { createContext, useContext, useEffect, useState } from "react";
+import { authService } from "@/services/AuthService";
+import { listarSecretarias, listarTecnicos } from "@/services/usuarios";
+import { LoginRequest, Usuario } from "@/types/types";
 
-interface AuthContextType {
-  user: User | null;
-  session: Session | null;
-  userProfile: any | null;
+type Ctx = {
+  user: Usuario | null;
+  userProfile: Usuario | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, name: string, role: 'secretaria' | 'tecnico') => Promise<{ error: any }>;
-  signOut: () => Promise<void>;
+  isAuthenticated: boolean;
+  signIn: (c: LoginRequest) => Promise<{ success: boolean; error?: string }>;
+  signOut: () => void;
+};
+const AuthContext = createContext<Ctx | undefined>(undefined);
+
+function normalizeUser(raw: any): Usuario {
+  const id = Number(raw?.user_id ?? raw?.id ?? raw?.CODIGO ?? raw?.codigo ?? NaN);
+  const name = String(raw?.name ?? raw?.nome ?? raw?.NOME ?? "");
+  const roleRaw =
+    raw?.role ?? raw?.tipoUsuario ?? raw?.tipo ?? raw?.ATRIBUICAO ?? raw?.atribuicao ?? "";
+  const role = String(roleRaw).toLowerCase();
+  return { ...raw, user_id: id, id, name, role } as Usuario;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+async function hydrateUserName(u: Usuario): Promise<Usuario> {
+  const isPlaceholder = !u?.name || /^Usuário\s+\d+$/i.test(String(u.name).trim());
+  if (!isPlaceholder) {
+    localStorage.setItem("user", JSON.stringify(u));
+    return u;
+  }
+  const myId = Number(u.user_id);
+  let nome = "";
+  let role = (u.role ?? "").toLowerCase();
+
+  const [secs, tecs] = await Promise.all([
+    listarSecretarias().catch(() => [] as Usuario[]),
+    listarTecnicos().catch(() => [] as Usuario[]),
+  ]);
+
+  const sec = secs.find((s) => Number(s.user_id) === myId);
+  const tec = tecs.find((t) => Number(t.user_id) === myId);
+  if (sec) {
+    nome = sec.name;
+    role = role || "secretaria";
+  } else if (tec) {
+    nome = tec.name;
+    role = role || "tecnico";
+  }
+
+  const hydrated = { ...u, name: nome || u.name || "", role: role || u.role || "" } as Usuario;
+  localStorage.setItem("user", JSON.stringify(hydrated));
+  return hydrated;
+}
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [userProfile, setUserProfile] = useState<any | null>(null);
+  const [user, setUser] = useState<Usuario | null>(null);
+  const [userProfile, setUserProfile] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (error) throw error;
-      setUserProfile(data);
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      setUserProfile(null);
-    }
-  };
-
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Defer profile fetch to avoid blocking auth state
-          setTimeout(() => {
-            fetchUserProfile(session.user.id);
-          }, 0);
-        } else {
-          setUserProfile(null);
+    try {
+      const token = localStorage.getItem("token");
+      const saved = localStorage.getItem("user");
+      if (!token) {
+        setUser(null);
+        setUserProfile(null);
+        return;
+      }
+      if (saved) {
+        const parsed = normalizeUser(JSON.parse(saved));
+        setUser(parsed);
+        setUserProfile(parsed);
+        if (!parsed.name || /^Usuário\s+\d+$/i.test(parsed.name)) {
+          hydrateUserName(parsed)
+            .then((hydr) => {
+              setUser(hydr);
+              setUserProfile(hydr);
+            })
+            .catch(() => void 0);
         }
-        
-        setLoading(false);
       }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        setTimeout(() => {
-          fetchUserProfile(session.user.id);
-        }, 0);
-      }
-      
+    } finally {
       setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
-  };
+  const signIn = async (credentials: LoginRequest) => {
+    try {
+      setLoading(true);
 
-  const signUp = async (email: string, password: string, name: string, role: 'secretaria' | 'tecnico') => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          name,
-          role
-        }
+      const r = await authService.login(credentials);
+      if (!r.success) return { success: false, error: r.error };
+
+      // 1) Salva token numa única chave
+      localStorage.setItem("token", r.token);
+      if (r.expiresInSeconds && Number.isFinite(r.expiresInSeconds)) {
+        const expAt = Date.now() + r.expiresInSeconds * 1000;
+        localStorage.setItem("token_expires_at", String(expAt));
       }
-    });
 
-    if (error) return { error };
+      // 2) Garante ter usuário
+      const rawUser = r.user ?? (await authService.me()).valueOf();
+      const normalized = normalizeUser(
+        rawUser ?? { user_id: Number(credentials.usuario), name: `Usuário ${credentials.usuario}`, role: "" }
+      );
 
-    // Create profile
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          user_id: data.user.id,
-          name,
-          role
-        });
-      
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-        return { error: profileError };
-      }
+      setUser(normalized);
+      setUserProfile(normalized);
+      localStorage.setItem("user", JSON.stringify(normalized));
+
+      // 3) Hidrata o nome em background
+      hydrateUserName(normalized)
+        .then((hydr) => {
+          setUser(hydr);
+          setUserProfile(hydr);
+        })
+        .catch(() => void 0);
+
+      return { success: true };
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ??
+        e?.message ??
+        "Falha ao autenticar. Verifique suas credenciais.";
+      return { success: false, error: msg };
+    } finally {
+      setLoading(false);
     }
-
-    return { error: null };
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signOut = () => {
+    setUser(null);
     setUserProfile(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("token_expires_at");
   };
 
-  const value = {
-    user,
-    session,
-    userProfile,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        userProfile,
+        loading,
+        isAuthenticated: !!user && !!localStorage.getItem("token"),
+        signIn,
+        signOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 };

@@ -2,9 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design System - Controle de Técnicos Externos
-Cores corporativas profissionais com foco em produtividade e clareza.
-*/
 
 @layer base {
   :root {
@@ -73,6 +70,8 @@ Cores corporativas profissionais com foco em produtividade e clareza.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --border: 214.3 31.8% 91.4%;
   }
 
   .dark {
@@ -115,11 +114,69 @@ Cores corporativas profissionais com foco em produtividade e clareza.
 }
 
 @layer base {
+  :root {
+    --background: 220 20% 98%;
+    --foreground: 220 40% 15%;
+    --card: 0 0% 100%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 16% 47%;
+    --border: 220 13% 91%;
+    /* ... outras variáveis */
+  }
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
 
   body {
-    @apply bg-background text-foreground;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
 }
+
+@layer utilities {
+  .full-bleed {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+}
+
+.rbc-calendar {
+  background: transparent;
+  font-family: inherit;
+}
+
+.rbc-month-view, .rbc-time-view, .rbc-agenda-view {
+  background: transparent;
+}
+
+.rbc-header, .rbc-month-row, .rbc-day-bg, .rbc-time-header {
+  border-color: rgba(255,255,255,0.2);
+}
+
+.rbc-today {
+  background: rgba(59,130,246,0.08); /* azul-500 08% */
+}
+
+.rbc-event, .rbc-day-slot .rbc-background-event {
+  border: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.calendar-shell,
+.calendar-shell .rbc-calendar,
+.calendar-shell .rbc-month-view {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+}
+
+/* Visual translúcido e linhas suaves */
+.rbc-calendar { background: transparent; font-family: inherit; }
+.rbc-month-view { background: transparent; }
+.rbc-header, .rbc-month-row, .rbc-day-bg { border-color: rgba(255,255,255,0.2); }
+.rbc-today { background: rgba(59,130,246,0.08); }
+.rbc-event { border: none; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+
+
+.rbc-month-row { min-height: 120px; }

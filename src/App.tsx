@@ -7,6 +7,8 @@ import { useAuth } from './hooks/useAuth';
 import Auth from './pages/Auth';
 import Index from "./pages/Index";
 import { Loader2 } from 'lucide-react';
+import EncaixeNovoPage from "@/pages/EncaixeNovo";
+
 
 const queryClient = new QueryClient();
 
@@ -28,9 +30,8 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
-            <Route path="/" element={user ? <Index /> : <Navigate to="/auth" />} />
-            <Route path="*" element={<Navigate to="/" />} />
+            <Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" replace />} />
+            <Route path="/*" element={user ? <Index /> : <Navigate to="/auth" replace />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

@@ -19,16 +19,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { CalendarIcon, ClockIcon } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { on } from "events";
+
+import { listarTecnicos } from "@/services/usuarios";
+import { atualizarAgendamento } from "@/services/agendamentos";
 
 interface EditarAgendamentoDialogProps {
-  agendamento: any;
+  agendamento: any; // ideal: tipar com seu DTO
   onFechar: () => void;
-  onAtualizar(novoAgendamento): any;
+  onAtualizar(novoAgendamento: any): void;
   open: boolean;
 }
-
 
 const EditarAgendamentoDialog = ({
   agendamento,
@@ -46,71 +46,66 @@ const EditarAgendamentoDialog = ({
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-  const carregarTecnicos = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("user_id, name")
-      .eq("role", "tecnico")
-      .order("name", { ascending: true });
-
-    if (error) {
-      console.error("Erro ao buscar técnicos:", error);
-    } else {
-      setTecnicos(data);
-    }
-  };
-
-  carregarTecnicos();
-}, []);
-
-  
+    (async () => {
+      try {
+        const lista = await listarTecnicos();
+        // normaliza para o formato usado no Select
+        setTecnicos(
+          (lista ?? []).map((u) => ({
+            user_id: (u.id ?? u.login ?? "").toString(),
+            name: u.nome,
+          }))
+        );
+      } catch (e) {
+        console.error("Erro ao buscar técnicos:", e);
+      }
+    })();
+  }, []);
 
   const salvarEdicao = async () => {
     const alterouData = novaData !== agendamento.data;
     const alterouHorario = novoHorario !== agendamento.horario;
 
     if ((alterouData || alterouHorario) && !motivo.trim()) {
-        alert("Informe o motivo da alteração.");
-        return;
+      alert("Informe o motivo da alteração.");
+      return;
     }
 
-    setSalvando(true);
+    try {
+      setSalvando(true);
 
-    const { error } = await supabase
-        .from("agendamentos")
-        .update({
+      // Monta o payload esperado pelo PUT
+      const atualizado = await atualizarAgendamento({
+        id: agendamento.id ?? agendamento.chave,              // compatível com seu backend
         data: novaData,
-        horario: novoHorario,
-        observacoes: novaObs,
-        ponto_referencia: pontoReferencia,
-        motivo_reagendamento: (alterouData || alterouHorario) ? motivo : null,
-        tecnico_id: tecnicoId,
-        })
-        .eq("id", agendamento.id);
+        hora: novoHorario,
+        observacao: novaObs,
+        ponto_referencia: pontoReferencia,                     // ignore se o backend não usar
+        motivo: (alterouData || alterouHorario) ? motivo : null,
+        tecnicoId,
+        // campos que já existem no registro atual e precisam ir no DTO completo
+        titulo: agendamento.titulo ?? null,
+        codigoCliente: agendamento.codigoCliente ?? agendamento.clienteId ?? null,
+        nomeCliente: agendamento.nomeCliente ?? agendamento.clienteNome ?? null,
+        grupoAgendamento: agendamento.grupoAgendamento ?? agendamento.codigoGrupo ?? null,
+      });
 
-        if (error) {
-            alert("Erro ao salvar edições.");
-            console.error(error);
-        } else {
-            const { data: atualizado } = await supabase
-                .from("agendamentos")
-                .select("*")
-                .eq("id", agendamento.id)
-                .single();
-
-            if (onAtualizar && atualizado) onAtualizar(atualizado);
-            alert("Agendamento atualizado com sucesso.");
-        }
-
-        setSalvando(false);
-    };
-
+      onAtualizar?.(atualizado);
+      alert("Agendamento atualizado com sucesso.");
+      onFechar();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao salvar edições.");
+    } finally {
+      setSalvando(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onFechar()}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Editar Agendamento #{agendamento.id}</DialogTitle>
+          <DialogTitle>Editar Agendamento #{agendamento.id ?? agendamento.chave}</DialogTitle>
           <DialogDescription>
             Informações completas sobre o atendimento
           </DialogDescription>
@@ -144,19 +139,18 @@ const EditarAgendamentoDialog = ({
           <div>
             <Label htmlFor="tecnico">Técnico Responsável *</Label>
             <Select value={tecnicoId} onValueChange={(value) => setTecnicoId(value)}>
-                <SelectTrigger>
+              <SelectTrigger>
                 <SelectValue placeholder="Selecione o técnico" />
-                </SelectTrigger>
-                <SelectContent>
-                {tecnicos.map(tecnico => (
-                    <SelectItem key={tecnico.user_id} value={tecnico.user_id}>
+              </SelectTrigger>
+              <SelectContent>
+                {tecnicos.map((tecnico) => (
+                  <SelectItem key={tecnico.user_id} value={tecnico.user_id}>
                     {tecnico.name}
-                    </SelectItem>
+                  </SelectItem>
                 ))}
-                </SelectContent>
+              </SelectContent>
             </Select>
-            </div>
-
+          </div>
 
           <div>
             <Label>Observações</Label>
@@ -179,15 +173,15 @@ const EditarAgendamentoDialog = ({
           </div>
 
           {(novaData !== agendamento.data || novoHorario !== agendamento.horario) && (
-          <div>
-            <Label>Motivo da alteração</Label>
-            <Textarea
-              rows={2}
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Motivo do reagendamento/alteração"
-            />
-          </div>
+            <div>
+              <Label>Motivo da alteração</Label>
+              <Textarea
+                rows={2}
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Motivo do reagendamento/alteração"
+              />
+            </div>
           )}
 
           <div className="flex justify-end">
