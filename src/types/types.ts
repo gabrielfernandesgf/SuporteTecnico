@@ -103,9 +103,9 @@ export interface NovoAgendamentoRequest {
 }
 
 export const API_ENDPOINTS = {
-  LOGIN: 'http://localhost:8081/api/auth',
-  AGENDAMENTOS: 'http://localhost:8081/api/agendamentos',
-  ENCAIXES: 'http://localhost:8081/api/encaixes',
-  USUARIOS: 'http://localhost:8081/api/usuarios',
-  FUNCIONARIOS: 'http://localhost:8081/api/funcionarios'
+  LOGIN: 'https://66d859bfdf0f.ngrok-free.app/api/auth',
+  AGENDAMENTOS: 'https://66d859bfdf0f.ngrok-free.app/api/agendamentos',
+  ENCAIXES: 'https://66d859bfdf0f.ngrok-free.app/api/encaixes',
+  USUARIOS: 'https://66d859bfdf0f.ngrok-free.app/api/usuarios',
+  FUNCIONARIOS: 'https://66d859bfdf0f.ngrok-free.app/api/funcionarios'
 } as const
