@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Cria instância do axios
 export const api = axios.create({
-  baseURL: "http://syndata.elodatacenter.com.br:9090/api",
+  baseURL: "https://66d859bfdf0f.ngrok-free.app/api",
   headers: { Accept: "application/json" },
   timeout: 15000,
 });
