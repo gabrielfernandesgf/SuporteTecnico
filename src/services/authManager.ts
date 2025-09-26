@@ -1,7 +1,7 @@
 import { api } from './api';
 
 class AuthManager {
-  private tokenKey = 'authToken';
+  private tokenKey = 'token';
   private userKey = 'userData';
 
   setToken(token: string): void {

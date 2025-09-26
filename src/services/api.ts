@@ -2,10 +2,13 @@ import axios from "axios";
 
 // Cria instância do axios
 export const api = axios.create({
-  baseURL: "https://66d859bfdf0f.ngrok-free.app/api",
-  headers: { Accept: "application/json" },
-  timeout: 15000,
-});
+  baseURL: import.meta.env.VITE_API_URL,      // ex.: https://SEU-NGROK.ngrok-free.app/api
+  headers: {
+    Accept: "application/json",
+    "ngrok-skip-browser-warning": "true",     // <— bypass do interstitial
+  },
+  timeout: 20000,
+})
 
 // Interceptor para adicionar token automaticamente
 api.interceptors.request.use((config) => {
