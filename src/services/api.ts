@@ -2,10 +2,10 @@ import axios from "axios";
 
 // Cria instância do axios
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,      // ex.: https://SEU-NGROK.ngrok-free.app/api
+  baseURL: import.meta.env.VITE_API_URL,
   headers: {
     Accept: "application/json",
-    "ngrok-skip-browser-warning": "true",     // <— bypass do interstitial
+    "ngrok-skip-browser-warning": "true",
   },
   timeout: 20000,
 })

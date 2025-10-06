@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "http://syndata.elodatacenter.com.br:9090/api/:path*"
+    }
+  ]
+}
