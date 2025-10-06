@@ -163,7 +163,7 @@ export default function Index() {
             </SidebarGroup>
           </SidebarContent>
         </Sidebar>
-        <SidebarInset className="flex-1 min-w-0 w-full max-w-none p-0 pt-12 md:pt-0">
+        <SidebarInset className="flex-1 min-w-0 w-full max-w-none p-0 pt-14 md:pt-0">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/agenda" element={<AgendaTabela />} />
