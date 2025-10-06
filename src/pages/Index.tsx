@@ -23,6 +23,8 @@ import { useAuth } from "@/hooks/useAuth";
 import TecnicoView from "./TecnicoView";
 import { useEffect } from "react";
 
+import MobileNav from "@/components/MobileNav";
+
 export default function Index() {
   const navigate = useNavigate();
   const { userProfile, signOut } = useAuth();
@@ -50,8 +52,8 @@ export default function Index() {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen">
-        {/* Lateral */}
-        <Sidebar collapsible="icon">
+        <MobileNav />
+        <Sidebar collapsible="icon" className="hidden md:flex">
           <SidebarHeader>
             <div className="flex items-center gap-2 px-2 py-1">
               <SidebarTrigger />
@@ -62,8 +64,7 @@ export default function Index() {
           <SidebarContent>
             {userProfile?.role === "secretaria" && (
               <>
-                {/* Menu */}
-                < SidebarGroup >
+                <SidebarGroup>
                   <SidebarGroupLabel>Menu</SidebarGroupLabel>
                   <SidebarMenu>
                     <SidebarMenuItem>
@@ -114,33 +115,31 @@ export default function Index() {
               </>
             )}
 
-
-            {/* Ações */}
             {userProfile?.role === "secretaria" && (
               <>
-            <SidebarGroup>
-              <SidebarGroupLabel>Ações</SidebarGroupLabel>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link to="/agendamentos/novo">
-                      <Plus className="mr-2 h-4 w-4" />
-                      <span>Novo Agendamento</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <SidebarGroup>
+                  <SidebarGroupLabel>Ações</SidebarGroupLabel>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild>
+                        <Link to="/agendamentos/novo">
+                          <Plus className="mr-2 h-4 w-4" />
+                          <span>Novo Agendamento</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
 
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link to="/encaixes/novo">
-                      <Plus className="mr-2 h-4 w-4" />
-                      <span>Novo Encaixe</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroup>
-            </>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild>
+                        <Link to="/encaixes/novo">
+                          <Plus className="mr-2 h-4 w-4" />
+                          <span>Novo Encaixe</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroup>
+              </>
             )}
 
             <SidebarGroup className="mt-auto">
@@ -164,22 +163,18 @@ export default function Index() {
             </SidebarGroup>
           </SidebarContent>
         </Sidebar>
-
-        <SidebarInset className="flex-1 min-w-0 w-full max-w-none p-0">
+        <SidebarInset className="flex-1 min-w-0 w-full max-w-none p-0 pt-12 md:pt-0">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/agenda" element={<AgendaTabela />} />
             <Route path="/agendamentos/novo" element={<AgendamentoNovo />} />
             <Route path="/encaixes" element={<EncaixesListPage />} />
             <Route path="/tecnico" element={<TecnicoView />} />
-            <Route
-              path="encaixes/novo"
-              element={<EncaixeNovoPage onVoltar={() => navigate(-1)} />}
-            />
+            <Route path="encaixes/novo" element={<EncaixeNovoPage onVoltar={() => navigate(-1)} />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </SidebarInset>
       </div>
-    </SidebarProvider >
+    </SidebarProvider>
   );
 }
