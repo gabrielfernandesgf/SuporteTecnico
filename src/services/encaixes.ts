@@ -106,39 +106,34 @@ export async function listarEncaixesAguardando(): Promise<EncaixeListItem[]> {
   }
 }
 
-export async function listarEncaixesDoTecnico(tecnicoId: number, status: StatusEncaixe = "A") {
-  const { data } = await api.get(`/encaixes/meus?tecnicoId=${encodeURIComponent(tecnicoId)}&status=${status}`);
-  return data;
+export async function listarEncaixesDoTecnico(
+  tecnicoId: number,
+  status: StatusEncaixe = "A"
+): Promise<EncaixeListItem[]> {
+  const { data } = await api.get("/encaixes/meus", {
+    params: { tecnicoId, status },
+  });
+  return mapArray(data);
 }
 
 export async function aceitarEncaixe(chave: number, tecnicoId: number) {
   return atribuirTecnicoEncaixe(chave, tecnicoId);
 }
 export async function solicitarEncaixe(chave: number, tecnicoId: number) {
-  try {
-    await api.post(`/encaixes/${chave}/solicitar`, { tecnicoId });
-  } catch {
-    await api.post(`/encaixes/${chave}/solicitar`, null, { params: { tecnicoId } });
-  }
+  await api.post(`/encaixes/${chave}/solicitar`, { tecnicoId });
 }
 
 export async function atribuirTecnicoEncaixe(chave: number, tecnicoId: number) {
-  try {
-    const { data } = await api.put(`/encaixes/${chave}/atribuir`, { tecnicoId });
-    return data;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      const { data } = await api.post(`/encaixes/${chave}/aceitar`, { tecnicoId });
-      return data;
-    }
-    throw err;
-  }
+  const { data } = await api.put(`/encaixes/${chave}/atribuir`, null, {
+    params: { tecnicoId, marcarPendente: true },
+  });
+  return data;
 }
 
-export async function converterEncaixe(chave: number, agendamentoId?: number) {
-  const path = agendamentoId
-    ? `/encaixes/${chave}/converter?agendamentoId=${agendamentoId}`
-    : `/encaixes/${chave}/converter`;
-  const { data } = await api.post(path);
+export async function converterEncaixe(
+  chave: number,
+  payload?: Record<string, any>
+) {
+  const { data } = await api.post(`/encaixes/${chave}/converter`, payload ?? {});
   return data;
 }

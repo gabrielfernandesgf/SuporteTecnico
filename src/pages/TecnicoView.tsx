@@ -14,7 +14,7 @@ import {
   finalizarComAssinatura,
   type Coords,
 } from "@/services/tecnico";
-import { listarEncaixesDoTecnico } from "@/services/encaixes";
+import { listarEncaixesDoTecnico, EncaixeListItem, listarEncaixesDisponiveis, solicitarEncaixe } from "@/services/encaixes";
 
 /* ====== Assinatura (canvas) — mantido ====== */
 function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
@@ -82,6 +82,7 @@ export default function TecnicoView() {
   const [agendamentos, setAgendamentos] = useState<any[]>([]);
   const [encAbertos, setEncAbertos] = useState<any[]>([]);
   const [encPendentes, setEncPendentes] = useState<any[]>([]);
+  const [encDisponiveis, setEncDisponiveis] = useState<EncaixeListItem[]>([]);
 
   // filtro de dia
   const [dia, setDia] = useState<"ontem" | "hoje" | "amanha">("hoje");
@@ -125,11 +126,13 @@ export default function TecnicoView() {
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(() => {}, () => {});
         }
-        const [ags, abertos, pend] = await Promise.all([
+        const [ags, abertos, pend, disp] = await Promise.all([
           listarMeusAgendamentos(tecnicoId),
-          listarEncaixesDoTecnico(tecnicoId, "A").catch(() => []),
-          listarEncaixesDoTecnico(tecnicoId, "P").catch(() => []),
+          listarEncaixesDoTecnico(tecnicoId, "A").catch(() => [] as EncaixeListItem[]),
+          listarEncaixesDoTecnico(tecnicoId, "P").catch(() => [] as EncaixeListItem[]),
+          listarEncaixesDisponiveis().catch(() => [] as EncaixeListItem[]),
         ]);
+        setEncDisponiveis(disp);
         setAgendamentos(ags);
         setEncAbertos(abertos ?? []);
         setEncPendentes(pend ?? []);
@@ -153,6 +156,15 @@ export default function TecnicoView() {
       );
     });
   }
+
+  async function onSolicitar(chave: number) {
+    await solicitarEncaixe(chave, tecnicoId);
+    const escolhido = encDisponiveis.find(e => e.chave === chave);
+    setEncDisponiveis(list => list.filter(e => e.chave !== chave));
+    if (escolhido) setEncPendentes(list => [escolhido, ...list]); // vai para P
+    toast({ title: "Solicitação enviada", description: "Aguardando confirmação da secretaria." });
+  }
+
 
   // ações do agendamento (técnico ainda pode operar no agendamento)
   async function onSaida(id: string) {
@@ -208,53 +220,31 @@ export default function TecnicoView() {
       {/* ====== MEUS ENCAIXES (A e P) — SOMENTE VISUALIZAÇÃO ====== */}
       <Card>
         <CardHeader>
-          <CardTitle>Meus Encaixes</CardTitle>
-          <CardDescription>Você só visualiza seus encaixes. Ações são feitas pela secretaria/gerência.</CardDescription>
+          <CardTitle>Encaixes disponíveis</CardTitle>
+          <CardDescription>Solicite um encaixe para que a secretaria confirme com o cliente</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <h4 className="font-semibold mb-2">Abertos</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {encAbertos.map((e: any) => (
-                <div key={`enc-a-${e.chave ?? e.id}`} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-xs text-muted-foreground">#{`ENC-${e.chave ?? e.id}`}</div>
-                      <div className="font-semibold">{e.nomeCliente ?? e.cliente}</div>
-                      {e.foneCliente && <div className="text-sm text-muted-foreground">{e.foneCliente}</div>}
-                    </div>
-                    <Badge variant="secondary">aberto</Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-2">
-                    Abertura: {e.dataHoraAbertura ? new Date(e.dataHoraAbertura).toLocaleString() : "—"}
-                  </div>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {encDisponiveis.map(e => (
+            <div key={e.chave} className="border rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-xs text-muted-foreground">#{`ENC-${e.chave}`}</div>
+                  <div className="font-semibold">{e.nomeCliente}</div>
+                  {e.foneCliente && <div className="text-sm text-muted-foreground">{e.foneCliente}</div>}
                 </div>
-              ))}
-              {encAbertos.length === 0 && <div className="text-sm text-muted-foreground col-span-full">Sem encaixes abertos.</div>}
+                <Badge variant="secondary">{e.tipoUrgencia ?? "Normal"}</Badge>
+              </div>
+              <div className="text-sm text-muted-foreground mt-2">
+                Abertura: {e.dataHoraAbertura ? new Date(e.dataHoraAbertura).toLocaleString() : "—"}
+              </div>
+              <div className="pt-2 flex justify-end">
+                <Button onClick={() => onSolicitar(e.chave)}>Solicitar</Button>
+              </div>
             </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Aguardando autorização</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {encPendentes.map((e: any) => (
-                <div key={`enc-p-${e.chave ?? e.id}`} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-xs text-muted-foreground">#{`ENC-${e.chave ?? e.id}`}</div>
-                      <div className="font-semibold">{e.nomeCliente ?? e.cliente}</div>
-                      {e.foneCliente && <div className="text-sm text-muted-foreground">{e.foneCliente}</div>}
-                    </div>
-                    <Badge variant="secondary">aguardando</Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-2">
-                    Abertura: {e.dataHoraAbertura ? new Date(e.dataHoraAbertura).toLocaleString() : "—"}
-                  </div>
-                </div>
-              ))}
-              {encPendentes.length === 0 && <div className="text-sm text-muted-foreground col-span-full">Sem encaixes pendentes.</div>}
-            </div>
-          </div>
+          ))}
+          {encDisponiveis.length === 0 && (
+            <div className="text-sm text-muted-foreground">Nenhum encaixe disponível agora.</div>
+          )}
         </CardContent>
       </Card>
 
